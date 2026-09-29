@@ -1,0 +1,28 @@
+server:
+  port: 0
+  servlet:
+    context-path: /open-api
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: application/json,application/geo+json,text/plain
+    min-response-size: 2KB
+
+spring:
+  application:
+    name: sj-lab-openapi
+
+openapi:
+  upstream:
+    # 데이터는 직접 DB 를 읽지 않고 mapservice-rest 를 호출해 중계한다(같은 SQL 을 두 벌로 두지 않기 위해).
+    # Eureka 서비스 이름으로 부르며, 로컬에서 게이트웨이를 통해 부르고 싶으면
+    # OPENAPI_UPSTREAM_BASE_URL=http://localhost:8100 처럼 덮어쓴다.
+    base-url: ${OPENAPI_UPSTREAM_BASE_URL:http://MAPSERVICE-REST}
+    connect-timeout-ms: 3000
+    read-timeout-ms: 20000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,0 +1,285 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-09-29",
+  "notice": "읽기 전용 공개 API입니다. 데이터 출처는 공공데이터포털·ITS·생활안전지도와 sj-lab 현장조사 데이터입니다.",
+  "groups": [
+    {
+      "id": "public-data",
+      "title": "공공데이터 레이어",
+      "description": "수집 배치가 매일 모아 둔 생활 시설 정보를 GeoJSON으로 내려줍니다. bbox 를 주면 그 화면 범위만 찾아옵니다.",
+      "apis": [
+        {
+          "id": "convenience-store",
+          "title": "편의점",
+          "method": "GET",
+          "path": "/v1/convenience-store",
+          "upstream": "/map/convenience-store",
+          "summary": "편의점 위치를 GeoJSON FeatureCollection 으로 내려줍니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "bbox",
+              "type": "string",
+              "required": false,
+              "description": "화면 범위(EPSG:3857) minX,minY,maxX,maxY. 없으면 전국 데이터라 응답이 큽니다.",
+              "example": "14120000,4500000,14160000,4530000"
+            },
+            {
+              "name": "limit",
+              "type": "integer",
+              "required": false,
+              "description": "최대 건수(기본 3000, 최대 20000). 넘으면 화면 전체에 고르게 퍼진 표본을 내려줍니다.",
+              "example": "500"
+            }
+          ]
+        },
+        {
+          "id": "bus-stop",
+          "title": "버스정류장",
+          "method": "GET",
+          "path": "/v1/bus-stop",
+          "upstream": "/map/busStop-info",
+          "summary": "버스정류장 위치를 GeoJSON 으로 내려줍니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "bbox",
+              "type": "string",
+              "required": false,
+              "description": "화면 범위(EPSG:3857) minX,minY,maxX,maxY. 전국 데이터가 커서 bbox 사용을 권장합니다.",
+              "example": "14120000,4500000,14160000,4530000"
+            },
+            {
+              "name": "limit",
+              "type": "integer",
+              "required": false,
+              "description": "최대 건수(기본 3000, 최대 20000).",
+              "example": "500"
+            }
+          ]
+        },
+        {
+          "id": "cctv",
+          "title": "CCTV",
+          "method": "GET",
+          "path": "/v1/cctv",
+          "upstream": "/map/cctv-info",
+          "summary": "도로 CCTV 위치와 스트리밍 주소를 내려줍니다. 스트리밍 주소는 주기적으로 갱신됩니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "bbox",
+              "type": "string",
+              "required": false,
+              "description": "화면 범위(EPSG:3857) minX,minY,maxX,maxY.",
+              "example": "14120000,4500000,14160000,4530000"
+            },
+            {
+              "name": "limit",
+              "type": "integer",
+              "required": false,
+              "description": "최대 건수(기본 3000, 최대 20000).",
+              "example": "500"
+            }
+          ]
+        },
+        {
+          "id": "pharmacy",
+          "title": "약국",
+          "method": "GET",
+          "path": "/v1/pharmacy",
+          "upstream": "/map/pharmacy-info",
+          "summary": "약국 위치와 기본 정보를 GeoJSON 으로 내려줍니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "bbox",
+              "type": "string",
+              "required": false,
+              "description": "화면 범위(EPSG:3857) minX,minY,maxX,maxY.",
+              "example": "14120000,4500000,14160000,4530000"
+            },
+            {
+              "name": "limit",
+              "type": "integer",
+              "required": false,
+              "description": "최대 건수(기본 3000, 최대 20000).",
+              "example": "500"
+            }
+          ]
+        },
+        {
+          "id": "hospital",
+          "title": "병원",
+          "method": "GET",
+          "path": "/v1/hospital",
+          "upstream": "/map/hospital-info",
+          "summary": "병원 위치와 기본 정보를 GeoJSON 으로 내려줍니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "bbox",
+              "type": "string",
+              "required": false,
+              "description": "화면 범위(EPSG:3857) minX,minY,maxX,maxY. 전국 데이터가 커서 bbox 사용을 권장합니다.",
+              "example": "14120000,4500000,14160000,4530000"
+            },
+            {
+              "name": "limit",
+              "type": "integer",
+              "required": false,
+              "description": "최대 건수(기본 3000, 최대 20000).",
+              "example": "500"
+            }
+          ]
+        },
+        {
+          "id": "government-office",
+          "title": "관공서",
+          "method": "GET",
+          "path": "/v1/government-office",
+          "upstream": "/map/governmentOffice-info",
+          "summary": "관공서 위치와 기본 정보를 GeoJSON 으로 내려줍니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "bbox",
+              "type": "string",
+              "required": false,
+              "description": "화면 범위(EPSG:3857) minX,minY,maxX,maxY.",
+              "example": "14120000,4500000,14160000,4530000"
+            },
+            {
+              "name": "limit",
+              "type": "integer",
+              "required": false,
+              "description": "최대 건수(기본 3000, 최대 20000).",
+              "example": "500"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "facility",
+      "title": "시설물",
+      "description": "현장조사 앱으로 수집한 시설물 정보입니다. 행정구역 코드로 걸러 볼 수 있습니다.",
+      "apis": [
+        {
+          "id": "facility-list",
+          "title": "시설물 목록",
+          "method": "GET",
+          "path": "/v1/facilities",
+          "upstream": "/map/qfield/facilities",
+          "summary": "시설물 위치와 상태를 GeoJSON 으로 내려줍니다. 코드를 주지 않으면 전체입니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "sidoCd",
+              "type": "string",
+              "required": false,
+              "description": "시·도 코드 2자리.",
+              "example": "11"
+            },
+            {
+              "name": "sggCd",
+              "type": "string",
+              "required": false,
+              "description": "시·군·구 코드 5자리.",
+              "example": "11110"
+            },
+            {
+              "name": "emdCd",
+              "type": "string",
+              "required": false,
+              "description": "읍·면·동 코드 8자리.",
+              "example": "11110101"
+            }
+          ]
+        },
+        {
+          "id": "facility-detail",
+          "title": "시설물 상세",
+          "method": "GET",
+          "path": "/v1/facilities/{totalId}",
+          "upstream": "/map/qfield/facilities/{totalId}",
+          "summary": "시설물 한 건의 상세 정보를 내려줍니다. 없는 값이면 404 입니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "totalId",
+              "type": "string",
+              "required": true,
+              "in": "path",
+              "description": "시설물 목록 응답의 total_id 값.",
+              "example": ""
+            }
+          ]
+        },
+        {
+          "id": "facility-icons",
+          "title": "시설물 아이콘 설정",
+          "method": "GET",
+          "path": "/v1/facility-icons",
+          "upstream": "/map/qfield/facility-icons",
+          "summary": "시설물 종류별 아이콘·색상 설정을 내려줍니다. 지도를 직접 그릴 때 씁니다.",
+          "responseType": "application/json",
+          "params": []
+        }
+      ]
+    },
+    {
+      "id": "admin-area",
+      "title": "행정구역",
+      "description": "시·도 → 시·군·구 → 읍·면·동 순서로 코드와 이름, 지도 범위를 내려줍니다.",
+      "apis": [
+        {
+          "id": "admin-sido",
+          "title": "시·도 목록",
+          "method": "GET",
+          "path": "/v1/admin-area/sido",
+          "upstream": "/map/admin-area/sido",
+          "summary": "시·도 코드와 이름, 지도 범위(BBOX)를 내려줍니다.",
+          "responseType": "application/json",
+          "params": []
+        },
+        {
+          "id": "admin-sgg",
+          "title": "시·군·구 목록",
+          "method": "GET",
+          "path": "/v1/admin-area/sgg",
+          "upstream": "/map/admin-area/sgg",
+          "summary": "시·도 코드에 속한 시·군·구 목록입니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "sidoCd",
+              "type": "string",
+              "required": false,
+              "description": "시·도 코드 2자리.",
+              "example": "11"
+            }
+          ]
+        },
+        {
+          "id": "admin-emd",
+          "title": "읍·면·동 목록",
+          "method": "GET",
+          "path": "/v1/admin-area/emd",
+          "upstream": "/map/admin-area/emd",
+          "summary": "시·군·구 코드에 속한 읍·면·동 목록입니다.",
+          "responseType": "application/json",
+          "params": [
+            {
+              "name": "sggCd",
+              "type": "string",
+              "required": false,
+              "description": "시·군·구 코드 5자리.",
+              "example": "11110"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
