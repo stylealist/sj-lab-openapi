@@ -51,7 +51,7 @@ sj-lab 플랫폼이 모아 둔 지도·시설물 데이터를 **외부에서 쓸
 - 한 사람당 키 5개, 기본 하루 1,000회. 한도를 넘으면 `429 QUOTA_EXCEEDED`, 폐기·오타 키는 `401 INVALID_API_KEY`.
 
 **표가 없거나 기능이 꺼져 있으면 키 API 만 503(`NOT_CONFIGURED`)이고, 공개 API 조회는 그대로 됩니다.**
-표는 `api` 스키마(`api.openapi_api_key`, `api.openapi_api_usage`)에 두며, `db/openapi_api_key.sql`·`db/openapi_api_usage.sql`로 만듭니다. **DDL 실행은 DB 담당자가** 합니다.
+표는 `api` 스키마(`api.openapi_api_key`, `api.openapi_api_usage`)에 두며, `sj-lab/db/api/openapi_api_key.sql`·`sj-lab/db/api/openapi_api_usage.sql`로 만듭니다. **DDL 실행은 DB 담당자가** 합니다.
 표가 생기면 재기동 없이 60초 안에 인식합니다.
 
 ## 요청 검사
@@ -95,6 +95,6 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local
 ## 현재 한계
 
 - **키는 아직 선택입니다.** 키 없이도 부를 수 있고, 그때는 기록되지 않습니다. 나중에 필수로 바꿀 수 있습니다.
-- 개발 DB에 표가 아직 없어 키 기능은 꺼 둔 상태입니다(`db/*.sql` 실행 후 켭니다).
+- 개발 DB에 표가 아직 없어 키 기능은 꺼 둔 상태입니다(`sj-lab/db/<스키마>/*.sql` 실행 후 켭니다).
 - 조회(GET)만 엽니다. 쓰기 API를 열 계획은 없습니다.
 - 응답은 원천 형식 그대로입니다(별도 가공·필드 이름 변경 없음).

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-sj-lab 저장소를 넘나드는 작업의 총괄 기준 저장소는 `C:\developer\workspace\mapservice-rest`입니다.
+sj-lab 저장소를 넘나드는 작업의 총괄 기준 저장소는 `C:\developer\workspace\sj-lab`입니다.
 전체 구조·API 계약·배포 경로는 그 저장소의 `docs/system-architecture.md`, 로컬 포트·기동 순서는
 `docs/dev-environment.md`를 따릅니다.
 
@@ -57,7 +57,7 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local --server.port
 - **표는 `api` 스키마**(`api.openapi_api_key`, `api.openapi_api_usage`)입니다(2026-09-29 결정 — 공개 API 관련 표는
   지도 데이터 `map` 과 분리). 스키마 이름은 `openapi.api-key.schema`(기본 `api`)로 바꿀 수 있고, SQL 에 그대로
   들어가는 값이라 `ApiKeyProperties`가 식별자 형식을 검증합니다. **`qfield` 스키마에는 절대 두지 말 것** —
-  `sj-qfieldsync`가 "삭제된 프로젝트 테이블"로 보고 지웁니다. DDL 실행은 에이전트가 하지 않습니다(`db/*.sql`).
+  `sj-qfieldsync`가 "삭제된 프로젝트 테이블"로 보고 지웁니다. DDL 실행은 에이전트가 하지 않습니다(`sj-lab/db/<스키마>/*.sql`).
 - **표가 없어도 서비스는 떠야 합니다.** `ApiKeyRepository`가 `to_regclass`로 존재를 확인해 캐시하고(없으면 60초 뒤 재확인),
   없으면 키 API 만 503이고 공개 조회는 그대로 갑니다. 이 폴백을 없애지 마세요.
 - **DataSource 는 조건부입니다**(`ApiKeyStoreConfig`, `@ConditionalOnProperty`). 그래서 메인 클래스에서
