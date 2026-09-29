@@ -51,7 +51,7 @@ sj-lab 플랫폼이 모아 둔 지도·시설물 데이터를 **외부에서 쓸
 - 한 사람당 키 5개, 기본 하루 1,000회. 한도를 넘으면 `429 QUOTA_EXCEEDED`, 폐기·오타 키는 `401 INVALID_API_KEY`.
 
 **표가 없거나 기능이 꺼져 있으면 키 API 만 503(`NOT_CONFIGURED`)이고, 공개 API 조회는 그대로 됩니다.**
-표는 `db/openapi_api_key.sql`, `db/openapi_api_usage.sql`로 만들며 **DDL 실행은 DB 담당자가** 합니다.
+표는 `api` 스키마(`api.openapi_api_key`, `api.openapi_api_usage`)에 두며, `db/openapi_api_key.sql`·`db/openapi_api_usage.sql`로 만듭니다. **DDL 실행은 DB 담당자가** 합니다.
 표가 생기면 재기동 없이 60초 안에 인식합니다.
 
 ## 요청 검사
@@ -85,6 +85,7 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local
 | `OPENAPI_API_KEY_ENABLED` | `false` | 키 기능 사용 여부. 켜려면 아래 DB 값이 필요합니다 |
 | `OPENAPI_API_KEY_DAILY_QUOTA` | `1000` | 새 키의 하루 한도 |
 | `OPENAPI_DB_URL` · `OPENAPI_DB_USERNAME` · `OPENAPI_DB_PASSWORD` | 없음 | 키·사용량 저장용 DB. **저장소에 적지 말 것**(public) |
+| `OPENAPI_DB_SCHEMA` | `api` | 키·사용량 표가 있는 스키마 |
 | `OPENAPI_AUTH_BASE_URL` | `http://SJ-LAB-AUTHSERVER` | 로그인 확인을 맡길 주소 |
 | `openapi.upstream.connect-timeout-ms` | 3000 | 연결 제한 시간 |
 | `openapi.upstream.read-timeout-ms` | 20000 | 응답 대기 시간(전국 데이터가 클 수 있어 넉넉히) |

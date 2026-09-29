@@ -1,5 +1,6 @@
 package com.example.openapi.key;
 
+import com.example.openapi.config.ApiKeyProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 키·사용량 표를 다룬다.
+ * 키·사용량 표를 다룬다. 표는 {@code api} 스키마에 둔다(지도 데이터와 분리, 스키마 이름은 설정값).
  *
  * <p>표가 아직 만들어지지 않았을 수 있으므로(DDL 실행은 담당자 몫) 존재 여부를 {@code to_regclass} 로
  * 확인해 캐시하고, 없으면 60초 뒤 다시 본다. mapservice-rest 의 내업 표 처리와 같은 방식이다.
@@ -26,12 +27,17 @@ public class ApiKeyRepository {
     private static final long RECHECK_INTERVAL_MS = 60_000L;
 
     private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
+    /** 스키마는 설정값이라 SQL 에 끼워 넣지만, 형식 검증은 ApiKeyProperties 가 한다. */
+    private final String keyTable;
+    private final String usageTable;
 
     private Boolean tablesExist;
     private long lastCheckedAt;
 
-    public ApiKeyRepository(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
+    public ApiKeyRepository(ObjectProvider<JdbcTemplate> jdbcTemplateProvider, ApiKeyProperties properties) {
         this.jdbcTemplateProvider = jdbcTemplateProvider;
+        this.keyTable = properties.getSchema() + ".openapi_api_key";
+        this.usageTable = properties.getSchema() + ".openapi_api_usage";
     }
 
     /** 키 기능을 쓸 수 있는 상태인지(연결이 있고 표도 있는지) */
@@ -45,7 +51,8 @@ public class ApiKeyRepository {
             lastCheckedAt = now;
             boolean exists = checkTables(jdbc);
             if (tablesExist == null || tablesExist != exists) {
-                log.info("API 키 표 확인: {}", exists ? "있음" : "없음 — 키 API 는 503, 공개 조회는 정상");
+                log.info("API 키 표({}, {}) 확인: {}", keyTable, usageTable,
+                        exists ? "있음" : "없음 — 키 API 는 503, 공개 조회는 정상");
             }
             tablesExist = exists;
         }
@@ -55,9 +62,9 @@ public class ApiKeyRepository {
     private boolean checkTables(JdbcTemplate jdbc) {
         try {
             Integer count = jdbc.queryForObject(
-                    "select count(*) from (select to_regclass('map.openapi_api_key') a, "
-                            + "to_regclass('map.openapi_api_usage') b) t where a is not null and b is not null",
-                    Integer.class);
+                    "select count(*) from (select to_regclass(?) a, to_regclass(?) b) t "
+                            + "where a is not null and b is not null",
+                    Integer.class, keyTable, usageTable);
             return count != null && count > 0;
         } catch (DataAccessException e) {
             // 원인 메시지까지 남긴다 — "표가 없음"과 "DB 에 못 붙음"은 대응이 다르다.
@@ -77,7 +84,7 @@ public class ApiKeyRepository {
 
     public long insertKey(String username, String keyPrefix, String keyHash, String label, int dailyQuota) {
         Long keyId = jdbc().queryForObject(
-                "insert into map.openapi_api_key (owner_username, key_prefix, key_hash, label, daily_quota) "
+                "insert into " + keyTable + " (owner_username, key_prefix, key_hash, label, daily_quota) "
                         + "values (?, ?, ?, ?, ?) returning key_id",
                 Long.class, username, keyPrefix, keyHash, label, dailyQuota);
         return keyId == null ? 0L : keyId;
@@ -86,9 +93,9 @@ public class ApiKeyRepository {
     public List<ApiKeyRecord> findByOwner(String username) {
         return jdbc().query(
                 "select k.key_id, k.key_prefix, k.label, k.daily_quota, k.reg_date, k.last_used_at, "
-                        + "  (select count(*) from map.openapi_api_usage u "
+                        + "  (select count(*) from " + usageTable + " u "
                         + "     where u.key_id = k.key_id and u.called_date = current_date) as today_count "
-                        + "from map.openapi_api_key k "
+                        + "from " + keyTable + " k "
                         + "where k.owner_username = ? and k.use_yn = 'y' "
                         + "order by k.key_id desc",
                 (rs, rowNum) -> new ApiKeyRecord(
@@ -105,7 +112,7 @@ public class ApiKeyRepository {
     /** 폐기(소프트 삭제). 남의 키를 지울 수 없도록 계정까지 조건에 넣는다. */
     public boolean revoke(long keyId, String username) {
         return jdbc().update(
-                "update map.openapi_api_key set use_yn = 'n' "
+                "update " + keyTable + " set use_yn = 'n' "
                         + "where key_id = ? and owner_username = ? and use_yn = 'y'",
                 keyId, username) > 0;
     }
@@ -114,9 +121,9 @@ public class ApiKeyRepository {
     public Optional<ApiKeyOwner> findActiveByHash(String keyHash) {
         List<ApiKeyOwner> found = jdbc().query(
                 "select k.key_id, k.owner_username, k.daily_quota, "
-                        + "  (select count(*) from map.openapi_api_usage u "
+                        + "  (select count(*) from " + usageTable + " u "
                         + "     where u.key_id = k.key_id and u.called_date = current_date) as today_count "
-                        + "from map.openapi_api_key k where k.key_hash = ? and k.use_yn = 'y'",
+                        + "from " + keyTable + " k where k.key_hash = ? and k.use_yn = 'y'",
                 (rs, rowNum) -> new ApiKeyOwner(
                         rs.getLong("key_id"),
                         rs.getString("owner_username"),
@@ -128,9 +135,9 @@ public class ApiKeyRepository {
 
     public void recordUsage(long keyId, String apiId, int statusCode, int elapsedMs) {
         jdbc().update(
-                "insert into map.openapi_api_usage (key_id, api_id, status_code, elapsed_ms) values (?, ?, ?, ?)",
+                "insert into " + usageTable + " (key_id, api_id, status_code, elapsed_ms) values (?, ?, ?, ?)",
                 keyId, apiId, statusCode, elapsedMs);
-        jdbc().update("update map.openapi_api_key set last_used_at = now() where key_id = ?", keyId);
+        jdbc().update("update " + keyTable + " set last_used_at = now() where key_id = ?", keyId);
     }
 
     private String formatTimestamp(Timestamp timestamp) {

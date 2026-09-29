@@ -54,7 +54,9 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local --server.port
 
 - **키 원문을 저장하지 말 것.** DB에는 SHA-256 해시(`key_hash`)와 앞 8자리(`key_prefix`)만 남기고,
   원문은 발급 응답에 한 번만 담습니다. 로그에도 찍지 마세요.
-- **표는 `map` 스키마**(`map.openapi_api_key`, `map.openapi_api_usage`)입니다. `qfield` 스키마에 두면
+- **표는 `api` 스키마**(`api.openapi_api_key`, `api.openapi_api_usage`)입니다(2026-09-29 결정 — 공개 API 관련 표는
+  지도 데이터 `map` 과 분리). 스키마 이름은 `openapi.api-key.schema`(기본 `api`)로 바꿀 수 있고, SQL 에 그대로
+  들어가는 값이라 `ApiKeyProperties`가 식별자 형식을 검증합니다. **`qfield` 스키마에는 절대 두지 말 것** —
   `sj-qfieldsync`가 "삭제된 프로젝트 테이블"로 보고 지웁니다. DDL 실행은 에이전트가 하지 않습니다(`db/*.sql`).
 - **표가 없어도 서비스는 떠야 합니다.** `ApiKeyRepository`가 `to_regclass`로 존재를 확인해 캐시하고(없으면 60초 뒤 재확인),
   없으면 키 API 만 503이고 공개 조회는 그대로 갑니다. 이 폴백을 없애지 마세요.

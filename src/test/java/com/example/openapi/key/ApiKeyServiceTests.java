@@ -44,7 +44,7 @@ class ApiKeyServiceTests {
     private ApiKeyService service(boolean enabled) {
         ApiKeyProperties properties = new ApiKeyProperties();
         properties.setEnabled(enabled);
-        return new ApiKeyService(new ApiKeyRepository(NO_JDBC), properties);
+        return new ApiKeyService(new ApiKeyRepository(NO_JDBC, properties), properties);
     }
 
     @Test

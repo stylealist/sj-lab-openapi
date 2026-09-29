@@ -19,6 +19,8 @@ openapi:
     # 키 API 만 503 이고 공개 API 조회는 그대로 동작한다.
     enabled: ${OPENAPI_API_KEY_ENABLED:false}
     daily-quota: ${OPENAPI_API_KEY_DAILY_QUOTA:1000}
+    # 공개 API 관련 표는 지도 데이터(map)와 분리해 api 스키마에 모은다.
+    schema: ${OPENAPI_DB_SCHEMA:api}
     datasource:
       # 저장소가 public 이라 접속 정보는 환경변수로만 받는다. 로컬은 .claude/settings.local.json,
       # 운영은 k8s Secret 에서 넣는다.
