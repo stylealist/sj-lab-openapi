@@ -3,6 +3,8 @@ package com.example.openapi.proxy;
 import com.example.openapi.catalog.ApiCatalog;
 import com.example.openapi.catalog.ApiCatalogService;
 import com.example.openapi.config.UpstreamConfig;
+import com.example.openapi.key.ApiKeyRepository;
+import com.example.openapi.key.ApiKeyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -17,8 +19,10 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -30,15 +34,21 @@ public class ApiProxyService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiProxyService.class);
 
+    /** 키를 쿼리로 붙일 때 쓰는 이름. 이 값은 원천으로 올려보내지 않는다. */
+    public static final String API_KEY_PARAM = "apiKey";
+
     private final ApiCatalogService catalogService;
+    private final ApiKeyService keyService;
     private final RestTemplate restTemplate;
     private final UpstreamConfig.UpstreamProperties properties;
 
     public ApiProxyService(ApiCatalogService catalogService,
+                           ApiKeyService keyService,
                            @Qualifier("loadBalancedUpstreamRestTemplate") RestTemplate loadBalanced,
                            @Qualifier("directUpstreamRestTemplate") RestTemplate direct,
                            UpstreamConfig.UpstreamProperties upstreamProperties) {
         this.catalogService = catalogService;
+        this.keyService = keyService;
         // 서비스 이름(MAPSERVICE-REST)이면 로드밸런서를, 실제 주소면 그대로 부르는 쪽을 쓴다.
         this.restTemplate = upstreamProperties.isServiceName() ? loadBalanced : direct;
         this.properties = upstreamProperties;
@@ -46,20 +56,33 @@ public class ApiProxyService {
                 upstreamProperties.isServiceName() ? "Eureka 서비스 이름" : "실제 주소");
     }
 
-    public ResponseEntity<byte[]> relay(String requestPath, Map<String, String[]> queryParams) {
+    public ResponseEntity<byte[]> relay(String requestPath, Map<String, String[]> rawQueryParams, String presentedKey) {
         ApiCatalog.ApiDefinition definition = catalogService.findByPath(requestPath)
                 .orElseThrow(() -> new ApiProxyException(HttpStatus.NOT_FOUND, "UNKNOWN_API",
                         "제공하지 않는 경로입니다: " + requestPath + " (목록은 /open-api/catalog 참고)"));
+
+        // apiKey 는 이 서비스가 쓰는 값이라 원천으로 올려보내지 않고, 모르는 파라미터로도 보지 않는다.
+        Map<String, String[]> queryParams = new LinkedHashMap<>(rawQueryParams);
+        String[] keyFromQuery = queryParams.remove(API_KEY_PARAM);
+        String apiKey = StringUtils.hasText(presentedKey) || keyFromQuery == null || keyFromQuery.length == 0
+                ? presentedKey
+                : keyFromQuery[0];
+
+        // 키를 붙였으면 검사한다(틀리면 401, 하루 한도를 넘으면 429). 키가 없으면 지금은 그냥 통과.
+        Optional<ApiKeyRepository.ApiKeyOwner> owner = keyService.verifyForCall(apiKey);
 
         Map<String, String> pathVariables = catalogService.extractPathVariables(definition, requestPath);
         validateQueryParams(definition, queryParams);
 
         URI uri = buildUpstreamUri(definition, pathVariables, queryParams);
+        long startedAt = System.currentTimeMillis();
         try {
             ResponseEntity<byte[]> upstream = restTemplate.getForEntity(uri, byte[].class);
+            recordUsage(owner, definition, upstream.getStatusCode().value(), startedAt);
             return buildResponse(definition, upstream);
         } catch (HttpStatusCodeException e) {
             // 원천이 400·404 를 돌려주면 그대로 전달한다(시설물 상세의 "없는 ID" 등).
+            recordUsage(owner, definition, e.getStatusCode().value(), startedAt);
             return ResponseEntity.status(e.getStatusCode())
                     .contentType(resolveContentType(definition, e.getResponseHeaders() == null
                             ? null : e.getResponseHeaders().getContentType()))
@@ -67,9 +90,16 @@ public class ApiProxyService {
                     .body(e.getResponseBodyAsByteArray());
         } catch (RestClientException e) {
             log.warn("원천 호출 실패 api={} uri={} 원인={}", definition.id(), uri, e.getClass().getSimpleName());
+            recordUsage(owner, definition, HttpStatus.BAD_GATEWAY.value(), startedAt);
             throw new ApiProxyException(HttpStatus.BAD_GATEWAY, "UPSTREAM_UNAVAILABLE",
                     "데이터 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
         }
+    }
+
+    private void recordUsage(Optional<ApiKeyRepository.ApiKeyOwner> owner,
+                             ApiCatalog.ApiDefinition definition, int statusCode, long startedAt) {
+        owner.ifPresent(value -> keyService.recordUsage(value, definition.id(), statusCode,
+                (int) (System.currentTimeMillis() - startedAt)));
     }
 
     private void validateQueryParams(ApiCatalog.ApiDefinition definition, Map<String, String[]> queryParams) {

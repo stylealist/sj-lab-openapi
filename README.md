@@ -12,6 +12,8 @@ sj-lab 플랫폼이 모아 둔 지도·시설물 데이터를 **외부에서 쓸
 |---|---|
 | API 목록 제공 | `GET /catalog` — 공개 API의 경로·설명·파라미터·예시를 JSON으로 내려줍니다 |
 | 데이터 중계 | `GET /v1/...` — 요청을 검사해 `mapservice-rest`에서 데이터를 받아 그대로 전달합니다 |
+| API 키 | `POST/GET/DELETE /keys` — 로그인한 사람이 자기 키를 발급·확인·폐기합니다 |
+| 사용량·한도 | 키를 붙여 부른 호출을 기록하고 하루 한도를 넘으면 429를 돌려줍니다 |
 
 데이터베이스를 직접 읽지 않습니다. 같은 SQL이 두 저장소에 생기면 한쪽만 고쳐져 답이 달라지기 때문에,
 데이터는 항상 `mapservice-rest`에서 가져옵니다.
@@ -29,6 +31,28 @@ sj-lab 플랫폼이 모아 둔 지도·시설물 데이터를 **외부에서 쓸
 이 파일에 항목을 추가하면 됩니다(코드 수정 불필요).
 
 닫아 둔 것: 내업 기록 등록·수정·삭제(쓰기), 내업 사진, 첨부 파일 중계(외부 계정 필요). 정의에 없는 경로는 404입니다.
+
+## API 키
+
+키 없이도 공개 API를 부를 수 있습니다. **키를 붙이면** 호출이 기록되고 하루 한도가 적용됩니다.
+
+| 엔드포인트 | 설명 |
+|---|---|
+| `GET /keys/status` | 키 기능을 쓸 수 있는 상태인지(로그인 불필요) |
+| `POST /keys` | 키 발급. 본문 `{"label":"이름"}`(선택). **키 원문은 이 응답에만** 담깁니다 |
+| `GET /keys` | 내 키 목록 — 앞자리·이름·오늘 사용량·한도·마지막 사용 |
+| `DELETE /keys/{keyId}` | 폐기(소프트 삭제) |
+
+- 로그인 확인은 `sj-lab-authserver`의 `GET /auth/me`에 맡깁니다(JWT 서명 키를 복사해 두지 않기 위해).
+  `Authorization: Bearer <토큰>`이 없거나 틀리면 401입니다.
+- 키는 **원문을 저장하지 않습니다.** DB에는 SHA-256 해시와 앞 8자리만 남으므로 잃어버리면 새로 발급해야 합니다.
+- 호출할 때는 헤더 `X-API-Key: <키>`를 권합니다(헤더를 못 넣는 곳에서는 `?apiKey=` 도 됩니다).
+  `apiKey` 쿼리는 원천으로 전달되지 않습니다.
+- 한 사람당 키 5개, 기본 하루 1,000회. 한도를 넘으면 `429 QUOTA_EXCEEDED`, 폐기·오타 키는 `401 INVALID_API_KEY`.
+
+**표가 없거나 기능이 꺼져 있으면 키 API 만 503(`NOT_CONFIGURED`)이고, 공개 API 조회는 그대로 됩니다.**
+표는 `db/openapi_api_key.sql`, `db/openapi_api_usage.sql`로 만들며 **DDL 실행은 DB 담당자가** 합니다.
+표가 생기면 재기동 없이 60초 안에 인식합니다.
 
 ## 요청 검사
 
@@ -58,6 +82,10 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local
 | 키 / 환경변수 | 기본값 | 설명 |
 |---|---|---|
 | `OPENAPI_UPSTREAM_BASE_URL` | `http://MAPSERVICE-REST` | 데이터 원천. Eureka 서비스 이름이면 클라이언트 로드밸런서로, 실제 주소(`http://localhost:8100`)면 그대로 호출합니다 |
+| `OPENAPI_API_KEY_ENABLED` | `false` | 키 기능 사용 여부. 켜려면 아래 DB 값이 필요합니다 |
+| `OPENAPI_API_KEY_DAILY_QUOTA` | `1000` | 새 키의 하루 한도 |
+| `OPENAPI_DB_URL` · `OPENAPI_DB_USERNAME` · `OPENAPI_DB_PASSWORD` | 없음 | 키·사용량 저장용 DB. **저장소에 적지 말 것**(public) |
+| `OPENAPI_AUTH_BASE_URL` | `http://SJ-LAB-AUTHSERVER` | 로그인 확인을 맡길 주소 |
 | `openapi.upstream.connect-timeout-ms` | 3000 | 연결 제한 시간 |
 | `openapi.upstream.read-timeout-ms` | 20000 | 응답 대기 시간(전국 데이터가 클 수 있어 넉넉히) |
 
@@ -65,6 +93,7 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local
 
 ## 현재 한계
 
-- **API 키·사용량 제한이 아직 없습니다**(다음 단계). 지금은 누구나 호출할 수 있고 호출 기록도 남기지 않습니다.
+- **키는 아직 선택입니다.** 키 없이도 부를 수 있고, 그때는 기록되지 않습니다. 나중에 필수로 바꿀 수 있습니다.
+- 개발 DB에 표가 아직 없어 키 기능은 꺼 둔 상태입니다(`db/*.sql` 실행 후 켭니다).
 - 조회(GET)만 엽니다. 쓰기 API를 열 계획은 없습니다.
 - 응답은 원천 형식 그대로입니다(별도 가공·필드 이름 변경 없음).

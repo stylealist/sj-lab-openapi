@@ -46,7 +46,23 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local --server.port
 
 ## 현재 범위와 남은 작업
 
-- 지금은 **카탈로그 + 중계**까지 구현돼 있습니다. **API 키 발급·검증·사용량 기록은 아직 없습니다**(다음 단계).
-  키를 붙일 때 테이블은 `map` 스키마에 둘 것 — `qfield` 스키마의 비(非)프로젝트 테이블은 `sj-qfieldsync`가
-  삭제합니다. DDL 실행은 에이전트가 하지 않고 담당자가 직접 합니다.
-- 로그인 확인은 `sj-lab-authserver`의 `/auth/me`에 위임할 예정입니다(JWT 시크릿을 서비스마다 복사하지 않기 위해).
+- **카탈로그 + 중계 + API 키·사용량**까지 구현돼 있습니다. 키 기능은 기본이 꺼짐(`OPENAPI_API_KEY_ENABLED=false`)이며,
+  개발·운영 DB에 표가 만들어지고 접속 정보가 들어가면 켭니다.
+- 남은 것: 허브 카드 열기, 게이트웨이 `/open-api` 라우트, Helm 차트, nginx 경로(배포 단계).
+
+## API 키 관련 규칙
+
+- **키 원문을 저장하지 말 것.** DB에는 SHA-256 해시(`key_hash`)와 앞 8자리(`key_prefix`)만 남기고,
+  원문은 발급 응답에 한 번만 담습니다. 로그에도 찍지 마세요.
+- **표는 `map` 스키마**(`map.openapi_api_key`, `map.openapi_api_usage`)입니다. `qfield` 스키마에 두면
+  `sj-qfieldsync`가 "삭제된 프로젝트 테이블"로 보고 지웁니다. DDL 실행은 에이전트가 하지 않습니다(`db/*.sql`).
+- **표가 없어도 서비스는 떠야 합니다.** `ApiKeyRepository`가 `to_regclass`로 존재를 확인해 캐시하고(없으면 60초 뒤 재확인),
+  없으면 키 API 만 503이고 공개 조회는 그대로 갑니다. 이 폴백을 없애지 마세요.
+- **DataSource 는 조건부입니다**(`ApiKeyStoreConfig`, `@ConditionalOnProperty`). 그래서 메인 클래스에서
+  `DataSourceAutoConfiguration`을 제외했습니다 — 되돌리면 DB 설정 없이는 기동이 실패합니다.
+- **`apiKey` 쿼리 파라미터는 원천으로 올려보내지 말 것**(`ApiProxyService`에서 먼저 뺍니다). 그대로 두면
+  "모르는 파라미터"로 400이 나거나 원천 로그에 키가 남습니다.
+- 로그인 확인은 `sj-lab-authserver`의 `/auth/me`에 위임합니다(JWT 시크릿을 서비스마다 복사하지 않기 위해).
+  토큰 검증 로직을 이 저장소에 복제하지 마세요.
+- 키 발급 POST 는 본문을 문자열로 받아 직접 JSON 을 읽습니다 — `Map` 으로 받으면 `Content-Type` 이 없을 때
+  415 가 나가 진짜 원인(401)이 가려집니다(2026-09-29 실제 발생).
