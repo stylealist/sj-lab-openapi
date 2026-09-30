@@ -50,9 +50,12 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local --server.port
 
 ## 현재 범위와 남은 작업
 
-- **카탈로그 + 중계 + API 키·사용량**까지 구현돼 있습니다. 키 기능은 기본이 꺼짐(`OPENAPI_API_KEY_ENABLED=false`)이며,
-  개발·운영 DB에 표가 만들어지고 접속 정보가 들어가면 켭니다.
-- 남은 것: 허브 카드 열기, 게이트웨이 `/open-api` 라우트, Helm 차트, nginx 경로(배포 단계).
+- **카탈로그 + 중계 + API 키·사용량**까지 구현돼 있고 **운영에 켜져 있습니다**(2026-09-30). 코드 기본값은 여전히
+  꺼짐(`OPENAPI_API_KEY_ENABLED=false`)이고, 운영은 차트 `sj-lab-openapi/values.yaml`의 `apiKey.enabled: true` +
+  Secret `openapi-db-credentials`로 켭니다. 로컬은 표가 있는 DB 접속값과 `OPENAPI_API_KEY_ENABLED=true`를 넣어야 동작합니다.
+- **키 없는 호출은 지금도 허용됩니다.** 그래서 하루 한도는 키를 붙인 호출에만 적용되고, 키를 빼면 우회됩니다.
+  한도를 실제로 강제하려면 키 필수화나 IP 단위 제한이 필요한데 **정책 결정이라 사용자와 먼저 상의할 것**.
+- 남은 것: 공개 API 의 기계가 읽는 규격(OpenAPI 3) 제공, 카탈로그에 에러 코드 표 넣기.
 
 ## API 키 관련 규칙
 
