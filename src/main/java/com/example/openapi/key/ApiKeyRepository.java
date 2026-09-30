@@ -133,6 +133,27 @@ public class ApiKeyRepository {
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
     }
 
+    /**
+     * 그 계정의 살아 있는 키를 찾는다(원문 없이). 로그인한 사용자가 활용 페이지에서 부를 때 쓴다 —
+     * 키 원문은 저장하지 않으므로 화면이 원문을 몰라도 사용량을 이 키에 기록할 수 있어야 한다.
+     * 계정당 1개이므로 결과는 최대 한 건이지만, 옛 데이터에 여러 건이 있을 수 있어 최신 것을 쓴다.
+     */
+    public Optional<ApiKeyOwner> findActiveByOwner(String username) {
+        List<ApiKeyOwner> found = jdbc().query(
+                "select k.key_id, k.owner_username, k.daily_quota, "
+                        + "  (select count(*) from " + usageTable + " u "
+                        + "     where u.key_id = k.key_id and u.called_date = current_date) as today_count "
+                        + "from " + keyTable + " k where k.owner_username = ? and k.use_yn = 'y' "
+                        + "order by k.key_id desc limit 1",
+                (rs, rowNum) -> new ApiKeyOwner(
+                        rs.getLong("key_id"),
+                        rs.getString("owner_username"),
+                        rs.getInt("daily_quota"),
+                        rs.getInt("today_count")),
+                username);
+        return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
     public void recordUsage(long keyId, String apiId, int statusCode, int elapsedMs) {
         jdbc().update(
                 "insert into " + usageTable + " (key_id, api_id, status_code, elapsed_ms) values (?, ?, ?, ?)",

@@ -86,6 +86,51 @@ public class ApiKeyService {
         return repository.findByOwner(username);
     }
 
+    /**
+     * 계정당 1개를 자동으로 배정한다. 이미 있으면 그대로 두고, 없으면 만들어 원문을 함께 돌려준다.
+     * 발급 버튼을 누르지 않아도 로그인만 하면 키가 있도록 하기 위한 것이다(2026-10-01).
+     *
+     * <p>원문은 저장하지 않으므로(해시만) <b>여기서 만든 그 순간에만</b> 돌려줄 수 있다.
+     * 이미 있는 경우에는 원문 없이 목록만 준다 — 화면은 원문을 몰라도
+     * 로그인 토큰으로 호출할 수 있다({@link #verifyForLoggedInUser}).
+     */
+    public Map<String, Object> ensureKey(String username) {
+        requireReady();
+        List<ApiKeyRecord> existing = repository.findByOwner(username);
+        if (!existing.isEmpty()) {
+            return Map.of("items", existing, "created", false);
+        }
+        Map<String, Object> created = issue(username, "내 키");
+        log.info("API 키 자동 배정: 계정={}", username);
+        return Map.of("items", repository.findByOwner(username), "created", true, "issued", created);
+    }
+
+    /**
+     * 로그인한 사용자를 그 계정의 키로 간주해 호출을 허용한다.
+     * 키 원문을 저장하지 않으므로, 화면이 원문을 모른 채로도 호출하고 사용량을 남길 수 있게 하는 경로다.
+     * 키가 아직 없으면 이 시점에 자동 배정한다(원문은 돌려주지 않는다 — 화면이 필요로 하지 않는다).
+     */
+    public Optional<ApiKeyRepository.ApiKeyOwner> verifyForLoggedInUser(String username) {
+        if (!isReady()) {
+            throw new ApiProxyException(HttpStatus.SERVICE_UNAVAILABLE, "NOT_CONFIGURED",
+                    "지금은 키를 확인할 수 없어 호출을 받지 못합니다. 잠시 후 다시 시도해 주세요.");
+        }
+        ApiKeyRepository.ApiKeyOwner owner = repository.findActiveByOwner(username)
+                .orElseGet(() -> {
+                    issue(username, "내 키");
+                    log.info("API 키 자동 배정(호출 중): 계정={}", username);
+                    return repository.findActiveByOwner(username).orElseThrow(() ->
+                            new ApiProxyException(HttpStatus.INTERNAL_SERVER_ERROR, "KEY_ASSIGN_FAILED",
+                                    "키를 배정하지 못했습니다."));
+                });
+
+        if (owner.todayCount() >= owner.dailyQuota()) {
+            throw new ApiProxyException(HttpStatus.TOO_MANY_REQUESTS, "QUOTA_EXCEEDED",
+                    "오늘 호출 한도(" + owner.dailyQuota() + "회)를 다 썼습니다. 내일 다시 이용해 주세요.");
+        }
+        return Optional.of(owner);
+    }
+
     public void revoke(long keyId, String username) {
         requireReady();
         if (!repository.revoke(keyId, username)) {

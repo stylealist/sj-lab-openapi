@@ -1,5 +1,6 @@
 package com.example.openapi.proxy;
 
+import com.example.openapi.auth.AuthClient;
 import com.example.openapi.catalog.ApiCatalog;
 import com.example.openapi.catalog.ApiCatalogService;
 import com.example.openapi.config.ApiKeyProperties;
@@ -41,18 +42,21 @@ public class ApiProxyService {
     private final ApiCatalogService catalogService;
     private final ApiKeyService keyService;
     private final ApiKeyProperties keyProperties;
+    private final AuthClient authClient;
     private final RestTemplate restTemplate;
     private final UpstreamConfig.UpstreamProperties properties;
 
     public ApiProxyService(ApiCatalogService catalogService,
                            ApiKeyService keyService,
                            ApiKeyProperties keyProperties,
+                           AuthClient authClient,
                            @Qualifier("loadBalancedUpstreamRestTemplate") RestTemplate loadBalanced,
                            @Qualifier("directUpstreamRestTemplate") RestTemplate direct,
                            UpstreamConfig.UpstreamProperties upstreamProperties) {
         this.catalogService = catalogService;
         this.keyService = keyService;
         this.keyProperties = keyProperties;
+        this.authClient = authClient;
         // 서비스 이름(MAPSERVICE-REST)이면 로드밸런서를, 실제 주소면 그대로 부르는 쪽을 쓴다.
         this.restTemplate = upstreamProperties.isServiceName() ? loadBalanced : direct;
         this.properties = upstreamProperties;
@@ -60,7 +64,8 @@ public class ApiProxyService {
                 upstreamProperties.isServiceName() ? "Eureka 서비스 이름" : "실제 주소");
     }
 
-    public ResponseEntity<byte[]> relay(String requestPath, Map<String, String[]> rawQueryParams, String presentedKey) {
+    public ResponseEntity<byte[]> relay(String requestPath, Map<String, String[]> rawQueryParams,
+                                        String presentedKey, String authorizationHeader) {
         ApiCatalog.ApiDefinition definition = catalogService.findByPath(requestPath)
                 .orElseThrow(() -> new ApiProxyException(HttpStatus.NOT_FOUND, "UNKNOWN_API",
                         "제공하지 않는 경로입니다: " + requestPath + " (목록은 /open-api/catalog 참고)"));
@@ -72,10 +77,21 @@ public class ApiProxyService {
                 ? presentedKey
                 : keyFromQuery[0];
 
-        // 키를 붙였으면 검사한다(틀리면 401, 하루 한도를 넘으면 429).
-        // 키가 없을 때 어떻게 할지는 openapi.api-key.required 가 정한다(2026-09-30 필수로 전환).
-        requireKeyIfConfigured(apiKey);
-        Optional<ApiKeyRepository.ApiKeyOwner> owner = keyService.verifyForCall(apiKey);
+        // 호출자를 정하는 순서:
+        //   1) X-API-Key / apiKey — 밖에서 curl·코드로 부를 때
+        //   2) Authorization: Bearer — 활용 페이지처럼 로그인한 화면에서 부를 때.
+        //      키 원문은 저장하지 않으므로 화면이 원문을 모를 수 있다. 그 경우에도 호출이 되고
+        //      사용량이 그 계정 키에 쌓이게 하려고 이 경로를 둔다(2026-10-01).
+        //   3) 둘 다 없으면 openapi.api-key.required 가 정한다(기본 401).
+        Optional<ApiKeyRepository.ApiKeyOwner> owner;
+        if (StringUtils.hasText(apiKey)) {
+            owner = keyService.verifyForCall(apiKey);
+        } else if (StringUtils.hasText(authorizationHeader)) {
+            owner = keyService.verifyForLoggedInUser(authClient.requireUsername(authorizationHeader));
+        } else {
+            requireKeyIfConfigured(null);
+            owner = Optional.empty();
+        }
 
         Map<String, String> pathVariables = catalogService.extractPathVariables(definition, requestPath);
         validateQueryParams(definition, queryParams);

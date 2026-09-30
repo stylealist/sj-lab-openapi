@@ -55,13 +55,25 @@ public class ApiKeyController {
                 .body(keyService.issue(username, label));
     }
 
+    /**
+     * 내 키 목록. <b>키가 없으면 이 시점에 한 개를 자동으로 배정한다</b>(2026-10-01) —
+     * 발급 버튼을 누르지 않아도 로그인만 하면 키가 있도록 하기 위한 것이다.
+     *
+     * <p>그렇게 막 만든 경우에만 응답에 <code>issued</code>(원문 포함)가 실린다.
+     * 원문은 저장하지 않으므로 그다음 호출부터는 목록만 온다. 화면은 원문을 몰라도
+     * 로그인 토큰으로 데이터 API 를 부를 수 있다.
+     */
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> list(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
         String username = authClient.requireUsername(authorization);
+        Map<String, Object> assigned = keyService.ensureKey(username);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("username", username);
-        body.put("items", keyService.list(username));
+        body.put("items", assigned.get("items"));
+        if (Boolean.TRUE.equals(assigned.get("created"))) {
+            body.put("issued", assigned.get("issued"));
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CACHE_CONTROL, NO_STORE)
                 .body(body);
