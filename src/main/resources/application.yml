@@ -18,6 +18,10 @@ openapi:
     # 미리 만들어져 있어야 한다(db/*.sql — DDL 실행은 담당자 몫). 꺼져 있거나 표가 없으면
     # 키 API 만 503 이고 공개 API 조회는 그대로 동작한다.
     enabled: ${OPENAPI_API_KEY_ENABLED:false}
+    # 데이터 API(/v1/**)를 키 없이 부를 수 없게 한다(2026-09-30). 끄면 키 없는 호출이 통과하고
+    # 하루 한도가 키를 빼는 것만으로 우회되므로, 되돌릴 때는 그 점을 알고 결정할 것.
+    # 카탈로그와 키 상태는 로그인 전 화면이 써야 하므로 이 값과 무관하게 항상 열려 있다.
+    required: ${OPENAPI_API_KEY_REQUIRED:true}
     daily-quota: ${OPENAPI_API_KEY_DAILY_QUOTA:1000}
     # 공개 API 관련 표는 지도 데이터(map)와 분리해 api 스키마에 모은다.
     schema: ${OPENAPI_DB_SCHEMA:api}

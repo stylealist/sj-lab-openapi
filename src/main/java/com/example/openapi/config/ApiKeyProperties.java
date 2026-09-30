@@ -11,6 +11,16 @@ public class ApiKeyProperties {
     /** false 면 키 관련 API 는 503(NOT_CONFIGURED), 공개 API 조회는 그대로 동작한다. */
     private boolean enabled = false;
 
+    /**
+     * true 면 데이터 API(/v1/**)를 키 없이 부를 수 없다(401 API_KEY_REQUIRED). 2026-09-30 부터 기본 true.
+     *
+     * <p>끄면 키 없는 호출이 그대로 통과하고 사용량·한도는 키를 붙인 호출에만 적용된다 — 그러면
+     * 키를 빼는 것만으로 한도가 우회되므로, 되돌리려면 그 점을 알고 결정할 것.
+     * 카탈로그(<code>/catalog</code>)와 키 상태(<code>/keys/status</code>)는 로그인 전 화면이 써야 하므로
+     * 이 설정과 무관하게 항상 열려 있다.
+     */
+    private boolean required = true;
+
     /** 새 키의 기본 하루 한도 */
     private int dailyQuota = 1000;
 
@@ -28,6 +38,14 @@ public class ApiKeyProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isRequired() {
+        return required;
+    }
+
+    public void setRequired(boolean required) {
+        this.required = required;
     }
 
     public int getDailyQuota() {

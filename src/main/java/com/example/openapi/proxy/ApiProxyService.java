@@ -2,6 +2,7 @@ package com.example.openapi.proxy;
 
 import com.example.openapi.catalog.ApiCatalog;
 import com.example.openapi.catalog.ApiCatalogService;
+import com.example.openapi.config.ApiKeyProperties;
 import com.example.openapi.config.UpstreamConfig;
 import com.example.openapi.key.ApiKeyRepository;
 import com.example.openapi.key.ApiKeyService;
@@ -39,16 +40,19 @@ public class ApiProxyService {
 
     private final ApiCatalogService catalogService;
     private final ApiKeyService keyService;
+    private final ApiKeyProperties keyProperties;
     private final RestTemplate restTemplate;
     private final UpstreamConfig.UpstreamProperties properties;
 
     public ApiProxyService(ApiCatalogService catalogService,
                            ApiKeyService keyService,
+                           ApiKeyProperties keyProperties,
                            @Qualifier("loadBalancedUpstreamRestTemplate") RestTemplate loadBalanced,
                            @Qualifier("directUpstreamRestTemplate") RestTemplate direct,
                            UpstreamConfig.UpstreamProperties upstreamProperties) {
         this.catalogService = catalogService;
         this.keyService = keyService;
+        this.keyProperties = keyProperties;
         // 서비스 이름(MAPSERVICE-REST)이면 로드밸런서를, 실제 주소면 그대로 부르는 쪽을 쓴다.
         this.restTemplate = upstreamProperties.isServiceName() ? loadBalanced : direct;
         this.properties = upstreamProperties;
@@ -68,7 +72,9 @@ public class ApiProxyService {
                 ? presentedKey
                 : keyFromQuery[0];
 
-        // 키를 붙였으면 검사한다(틀리면 401, 하루 한도를 넘으면 429). 키가 없으면 지금은 그냥 통과.
+        // 키를 붙였으면 검사한다(틀리면 401, 하루 한도를 넘으면 429).
+        // 키가 없을 때 어떻게 할지는 openapi.api-key.required 가 정한다(2026-09-30 필수로 전환).
+        requireKeyIfConfigured(apiKey);
         Optional<ApiKeyRepository.ApiKeyOwner> owner = keyService.verifyForCall(apiKey);
 
         Map<String, String> pathVariables = catalogService.extractPathVariables(definition, requestPath);
@@ -94,6 +100,25 @@ public class ApiProxyService {
             throw new ApiProxyException(HttpStatus.BAD_GATEWAY, "UPSTREAM_UNAVAILABLE",
                     "데이터 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
         }
+    }
+
+    /**
+     * 키 없는 호출을 막을지 결정한다(<code>openapi.api-key.required</code>).
+     *
+     * <p>막도록 설정했는데 키 저장소가 준비되지 않았으면 <b>통과시키지 않고 503</b> 을 낸다.
+     * 키를 검증할 수 없는 상태에서 그냥 통과시키면 "필수"가 조용히 풀려 아무나 부를 수 있게 되기 때문이다.
+     * 반대로 이 설정을 꺼 두면 키 없는 호출이 종전처럼 그대로 통과한다(사용량·한도만 키에 적용).
+     */
+    private void requireKeyIfConfigured(String apiKey) {
+        if (!keyProperties.isRequired() || StringUtils.hasText(apiKey)) {
+            return;
+        }
+        if (!keyService.isReady()) {
+            throw new ApiProxyException(HttpStatus.SERVICE_UNAVAILABLE, "NOT_CONFIGURED",
+                    "지금은 키를 확인할 수 없어 호출을 받지 못합니다. 잠시 후 다시 시도해 주세요.");
+        }
+        throw new ApiProxyException(HttpStatus.UNAUTHORIZED, "API_KEY_REQUIRED",
+                "API 키가 필요합니다. 로그인해 키를 발급받은 뒤 X-API-Key 헤더(또는 apiKey 쿼리)로 보내세요.");
     }
 
     private void recordUsage(Optional<ApiKeyRepository.ApiKeyOwner> owner,
