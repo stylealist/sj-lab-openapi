@@ -69,7 +69,11 @@ public class ApiKeyService {
             throw new ApiProxyException(HttpStatus.BAD_REQUEST, "INVALID_LABEL", "이름은 100자까지입니다.");
         }
 
-        long keyId = repository.insertKey(username, prefix, hash(secret), safeLabel, properties.getDailyQuota());
+        // 원문도 함께 저장한다(2026-10-01) — 본인 화면에서 언제든 보고 복사할 수 있어야 해서다.
+        // 컬럼이 없는 DB 에서는 repository 가 알아서 원문 없이 넣고, 화면은 앞자리만 보여 준다.
+        // 검증은 어느 경우든 해시로만 한다. 이 값은 로그에 찍지 않는다.
+        long keyId = repository.insertKey(username, prefix, hash(secret), secret, safeLabel,
+                properties.getDailyQuota());
         log.info("API 키 발급: 계정={} keyId={}", username, keyId);
 
         return Map.of(
@@ -78,7 +82,7 @@ public class ApiKeyService {
                 "keyPrefix", prefix,
                 "label", safeLabel,
                 "dailyQuota", properties.getDailyQuota(),
-                "notice", "이 키는 지금 한 번만 보여 드립니다. 복사해 두세요.");
+                "notice", "이 키를 헤더(X-API-Key)에 넣어 부르세요.");
     }
 
     public List<ApiKeyRecord> list(String username) {

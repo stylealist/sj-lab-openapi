@@ -33,6 +33,8 @@ public class ApiKeyRepository {
 
     private Boolean tablesExist;
     private long lastCheckedAt;
+    private Boolean plainColumnExists;
+    private long plainCheckedAt;
 
     public ApiKeyRepository(ObjectProvider<JdbcTemplate> jdbcTemplateProvider, ApiKeyProperties properties) {
         this.jdbcTemplateProvider = jdbcTemplateProvider;
@@ -82,7 +84,56 @@ public class ApiKeyRepository {
         return jdbc;
     }
 
-    public long insertKey(String username, String keyPrefix, String keyHash, String label, int dailyQuota) {
+    /**
+     * key_plain 컬럼이 있는지. 없으면 원문을 저장·조회하지 않고 예전처럼 앞자리만 보여 준다 —
+     * 그래야 DDL(db/api/openapi_api_key_plain.sql)을 아직 돌리지 않은 DB 에서도 서비스가 그대로 뜬다.
+     * 한 번 있다고 확인되면 다시 확인하지 않고, 없을 때만 주기적으로 다시 본다(표 확인과 같은 방식).
+     */
+    public boolean hasPlainColumn() {
+        JdbcTemplate jdbc = jdbcTemplateProvider.getIfAvailable();
+        if (jdbc == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (plainColumnExists == null
+                || (!plainColumnExists && now - plainCheckedAt > RECHECK_INTERVAL_MS)) {
+            plainCheckedAt = now;
+            boolean exists = checkPlainColumn(jdbc);
+            if (plainColumnExists == null || plainColumnExists != exists) {
+                log.info("키 원문 컬럼(key_plain) 확인: {}", exists
+                        ? "있음 — 화면에 키 전체를 보여 준다"
+                        : "없음 — 앞자리만 보여 준다(db/api/openapi_api_key_plain.sql 실행 필요)");
+            }
+            plainColumnExists = exists;
+        }
+        return plainColumnExists;
+    }
+
+    private boolean checkPlainColumn(JdbcTemplate jdbc) {
+        try {
+            String[] parts = keyTable.split("\\.", 2);
+            Integer count = jdbc.queryForObject(
+                    "select count(*) from information_schema.columns "
+                            + "where table_schema = ? and table_name = ? and column_name = 'key_plain'",
+                    Integer.class, parts[0], parts[1]);
+            return count != null && count > 0;
+        } catch (DataAccessException e) {
+            log.warn("key_plain 컬럼 확인 실패: {} - {}", e.getClass().getSimpleName(),
+                    e.getMostSpecificCause().getMessage());
+            return false;
+        }
+    }
+
+    public long insertKey(String username, String keyPrefix, String keyHash, String keyPlain,
+                          String label, int dailyQuota) {
+        if (hasPlainColumn()) {
+            Long keyId = jdbc().queryForObject(
+                    "insert into " + keyTable
+                            + " (owner_username, key_prefix, key_hash, key_plain, label, daily_quota) "
+                            + "values (?, ?, ?, ?, ?, ?) returning key_id",
+                    Long.class, username, keyPrefix, keyHash, keyPlain, label, dailyQuota);
+            return keyId == null ? 0L : keyId;
+        }
         Long keyId = jdbc().queryForObject(
                 "insert into " + keyTable + " (owner_username, key_prefix, key_hash, label, daily_quota) "
                         + "values (?, ?, ?, ?, ?) returning key_id",
@@ -91,8 +142,10 @@ public class ApiKeyRepository {
     }
 
     public List<ApiKeyRecord> findByOwner(String username) {
+        boolean withPlain = hasPlainColumn();
         return jdbc().query(
                 "select k.key_id, k.key_prefix, k.label, k.daily_quota, k.reg_date, k.last_used_at, "
+                        + (withPlain ? "k.key_plain, " : "null::varchar as key_plain, ")
                         + "  (select count(*) from " + usageTable + " u "
                         + "     where u.key_id = k.key_id and u.called_date = current_date) as today_count "
                         + "from " + keyTable + " k "
@@ -101,6 +154,7 @@ public class ApiKeyRepository {
                 (rs, rowNum) -> new ApiKeyRecord(
                         rs.getLong("key_id"),
                         rs.getString("key_prefix"),
+                        rs.getString("key_plain"),
                         rs.getString("label"),
                         rs.getInt("daily_quota"),
                         rs.getInt("today_count"),
