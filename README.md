@@ -22,13 +22,22 @@ sj-lab 플랫폼이 모아 둔 지도·시설물 데이터를 **외부에서 쓸
 
 | 묶음 | 경로 | 내용 |
 |---|---|---|
-| 공공데이터 | `/v1/convenience-store`, `/v1/bus-stop`, `/v1/cctv`, `/v1/pharmacy`, `/v1/hospital`, `/v1/government-office` | 편의점·버스정류장·CCTV·약국·병원·관공서 (GeoJSON, `bbox`·`limit`) |
+| 공공데이터 | `/v1/convenience-store`, `/v1/bus-stop`, `/v1/cctv`, `/v1/pharmacy`, `/v1/hospital`, `/v1/government-office` | 편의점·버스정류장·CCTV·약국·병원·관공서 (GeoJSON, **`bbox` 필수**·`limit` 선택) |
 | 시설물 | `/v1/facilities`, `/v1/facilities/{totalId}`, `/v1/facility-icons` | 현장조사 시설물 목록·상세, 아이콘 설정 |
 | 행정구역 | `/v1/admin-area/sido`, `/sgg`, `/emd` | 시·도 → 시·군·구 → 읍·면·동 코드와 지도 범위 |
 
 **여는 범위는 `src/main/resources/catalog/api-catalog.json` 한 파일이 정합니다.** 화면에 보여 줄 문서와
 중계 허용 목록이 같은 파일이라, 문서에만 있고 실제로는 안 되는 API가 생기지 않습니다. 새 API를 열려면
 이 파일에 항목을 추가하면 됩니다(코드 수정 불필요).
+
+**공공데이터 6종은 `bbox`(화면 범위)가 필수입니다**(카탈로그 v1.1, 2026-09-30). 없이 부르면
+`400 MISSING_PARAMETER`입니다. 전국을 통째로 조립하면 응답이 수십 MB(실측 버스정류장 85MB·병원 61MB)가 되어
+원천 호출이 읽기 시간(20초)을 넘기고, 외부 호출자 한 명이 서비스 전체를 흔들 수 있기 때문입니다.
+`limit`은 선택이며 기본 3000·최대 20000이고, 상한을 넘으면 bbox 를 격자로 나눠 화면 전체에 고르게 퍼진 표본을 내려줍니다.
+
+**브라우저에서 부를 수 있습니다.** 게이트웨이가 `/open-api/**` 에만 CORS 오리진을 열어 두어(2026-09-30)
+남의 웹사이트에서도 호출됩니다 — `GET`·`OPTIONS` 만, 쿠키 없이(`allowCredentials: false`),
+요청 헤더는 `Content-Type`·`X-API-Key` 만 허용합니다. 그 밖의 경로는 여전히 sj-lab 도메인만 허용됩니다.
 
 닫아 둔 것: 내업 기록 등록·수정·삭제(쓰기), 내업 사진, 첨부 파일 중계(외부 계정 필요). 정의에 없는 경로는 404입니다.
 
