@@ -24,7 +24,13 @@ public class ApiKeyService {
     private static final Logger log = LoggerFactory.getLogger(ApiKeyService.class);
     private static final String KEY_PREFIX = "sjlab_";
     private static final int KEY_BYTES = 24;
-    private static final int MAX_KEYS_PER_USER = 5;
+    /**
+     * 계정당 살아 있는 키 개수. 1 이다(2026-09-30) — 키가 쌓이면 어느 것이 어디에 쓰이는지 알 수 없고,
+     * 폐기해도 쓰던 곳이 조용히 멈춘다. 새로 받으려면 쓰던 키를 먼저 폐기하게 해서
+     * "지금 쓰는 키가 무엇인지"를 항상 한 개로 유지한다.
+     * 폐기는 행을 지우지 않으므로(use_yn='n') 지난 키의 사용 기록은 남는다.
+     */
+    private static final int MAX_KEYS_PER_USER = 1;
 
     private final ApiKeyRepository repository;
     private final ApiKeyProperties properties;
@@ -51,7 +57,7 @@ public class ApiKeyService {
         requireReady();
         if (repository.findByOwner(username).size() >= MAX_KEYS_PER_USER) {
             throw new ApiProxyException(HttpStatus.CONFLICT, "TOO_MANY_KEYS",
-                    "키는 한 사람당 " + MAX_KEYS_PER_USER + "개까지입니다. 쓰지 않는 키를 지우고 다시 발급하세요.");
+                    "키는 계정당 1개입니다. 이미 있는 키를 폐기한 뒤 새로 발급하세요.");
         }
 
         byte[] bytes = new byte[KEY_BYTES];
