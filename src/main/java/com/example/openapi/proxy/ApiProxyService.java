@@ -94,6 +94,7 @@ public class ApiProxyService {
         }
 
         Map<String, String> pathVariables = catalogService.extractPathVariables(definition, requestPath);
+        validatePathVariables(pathVariables);
         validateQueryParams(definition, queryParams);
 
         URI uri = buildUpstreamUri(definition, pathVariables, queryParams);
@@ -141,6 +142,20 @@ public class ApiProxyService {
                              ApiCatalog.ApiDefinition definition, int statusCode, long startedAt) {
         owner.ifPresent(value -> keyService.recordUsage(value, definition.id(), statusCode,
                 (int) (System.currentTimeMillis() - startedAt)));
+    }
+
+    /**
+     * 경로 값이 비었거나 자리표시자(<code>{totalId}</code>)가 그대로 남아 있으면 400 으로 알려 준다.
+     * 전에는 그 값을 그대로 원천에 넘겨 본문 없는 400 이 돌아와, 무엇이 빠졌는지 알 수 없었다.
+     */
+    private void validatePathVariables(Map<String, String> pathVariables) {
+        for (Map.Entry<String, String> entry : pathVariables.entrySet()) {
+            String value = entry.getValue();
+            if (!StringUtils.hasText(value) || value.startsWith("{")) {
+                throw new ApiProxyException(HttpStatus.BAD_REQUEST, "MISSING_PATH_PARAMETER",
+                        "경로 값이 없습니다: " + entry.getKey());
+            }
+        }
     }
 
     private void validateQueryParams(ApiCatalog.ApiDefinition definition, Map<String, String[]> queryParams) {

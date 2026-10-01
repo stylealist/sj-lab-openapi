@@ -53,14 +53,24 @@ java -jar target/sj-lab-openapi.jar --spring.profiles.active=local --server.port
 - **카탈로그 + 중계 + API 키·사용량**까지 구현돼 있고 **운영에 켜져 있습니다**(2026-09-30). 코드 기본값은 여전히
   꺼짐(`OPENAPI_API_KEY_ENABLED=false`)이고, 운영은 차트 `sj-lab-openapi/values.yaml`의 `apiKey.enabled: true` +
   Secret `openapi-db-credentials`로 켭니다. 로컬은 표가 있는 DB 접속값과 `OPENAPI_API_KEY_ENABLED=true`를 넣어야 동작합니다.
-- **키 없는 호출은 지금도 허용됩니다.** 그래서 하루 한도는 키를 붙인 호출에만 적용되고, 키를 빼면 우회됩니다.
-  한도를 실제로 강제하려면 키 필수화나 IP 단위 제한이 필요한데 **정책 결정이라 사용자와 먼저 상의할 것**.
+- **키 없는 호출은 막혀 있습니다**(2026-10-01, `OPENAPI_API_KEY_REQUIRED=true`). 키도 로그인 토큰도 없으면
+  `401 API_KEY_REQUIRED` 입니다. 그래서 하루 한도가 실제로 걸립니다. 코드 기본값은 `required=true` 이지만
+  **키 저장소가 준비되지 않았으면 통과시키지 않고 503** 을 냅니다 — "필수"가 조용히 풀리지 않게 하려는 것이니
+  이 분기를 "열어 두기"로 바꾸지 말 것. 다시 열려면 사용자와 먼저 상의할 것.
 - 남은 것: 공개 API 의 기계가 읽는 규격(OpenAPI 3) 제공, 카탈로그에 에러 코드 표 넣기.
 
 ## API 키 관련 규칙
 
-- **키 원문을 저장하지 말 것.** DB에는 SHA-256 해시(`key_hash`)와 앞 8자리(`key_prefix`)만 남기고,
-  원문은 발급 응답에 한 번만 담습니다. 로그에도 찍지 마세요.
+- **계정당 키는 1개이고, 자동으로 배정됩니다**(2026-10-01). `GET /open-api/keys` 가 키가 없으면 그 자리에서
+  하나 만들어 돌려주므로 화면에 발급 버튼이 없습니다. 바꾸려면 폐기(`DELETE`) 후 다시 조회합니다.
+- **키 원문(`key_plain`)도 저장합니다**(2026-10-01, 사용자 요청으로 방침 변경). 다른 서버·프로그램에서 부를 때
+  키를 모르면 쓸 수 없어서, 본인 화면에서 언제든 전체 값을 보고 복사할 수 있게 했습니다.
+  **검증은 계속 `key_hash`(SHA-256)로만 하고, 원문은 로그에 찍지 마세요.** 컬럼이 없는 DB 에서도 떠야 하므로
+  `ApiKeyRepository.hasPlainColumn()` 폴백(앞자리만 표시)을 없애지 말 것. 스크립트는
+  `sj-lab/db/api/openapi_api_key_plain.sql` 입니다.
+- 화면(활용 페이지)에서 부를 때는 키 원문 대신 **로그인 토큰(`Authorization: Bearer`)** 만으로도 호출되며,
+  사용량은 그 계정 키에 쌓입니다(`ApiKeyService.verifyForLoggedInUser`). 단 **실행해 보기는 이 폴백을 쓰지 않습니다** —
+  밖에서 부르는 것과 똑같이 키로만 보내, 키를 비우면 진짜 401 이 보이게 합니다.
 - **표는 `api` 스키마**(`api.openapi_api_key`, `api.openapi_api_usage`)입니다(2026-09-29 결정 — 공개 API 관련 표는
   지도 데이터 `map` 과 분리). 스키마 이름은 `openapi.api-key.schema`(기본 `api`)로 바꿀 수 있고, SQL 에 그대로
   들어가는 값이라 `ApiKeyProperties`가 식별자 형식을 검증합니다. **`qfield` 스키마에는 절대 두지 말 것** —
